@@ -1,15 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/Secondary"
+    android:orientation="vertical"
+    android:padding="36dp"
     tools:context=".Live">
 
+    <Switch
+        android:id="@+id/switch2"
+        android:layout_width="match_parent"
+        android:layout_height="67dp"
+        android:background="@color/primary"
+        android:text="Start Denoiser"
+        android:textColor="@color/Text"
+        android:textSize="24dp"/>
+
     <TextView
-        android:layout_width="wrap_content"
+        android:id="@+id/state"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Live"
-        android:layout_gravity="center"/>
-
-
-</FrameLayout>
+        android:text="FilterShot is Paused"
+        android:textSize="24sp"
+        android:layout_marginTop="64dp"
+        android:textColor="@color/Text"/>
+</LinearLayout>

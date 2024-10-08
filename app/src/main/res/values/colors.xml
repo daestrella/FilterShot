@@ -7,4 +7,6 @@
     <color name="Accent">#99a8b2</color>
     <color name="Text">#0c100e</color>
     <color name="Background">#f4f7f6</color>
+    <color name="Error">#AF524C</color>
+    <color name="Go">#598ABD</color>
 </resources>

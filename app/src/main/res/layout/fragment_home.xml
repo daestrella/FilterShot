@@ -1,15 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/Secondary"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="16dp"
     tools:context=".Home">
 
-
-    <Switch
-        android:id="@+id/switch1"
+    <Button
+        android:id="@+id/pick_file_button"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Mode" />
-</FrameLayout>
+        android:text="Pick a File"
+        android:backgroundTint="@color/primary"
+        android:textColor="@color/white"/>
+
+    <TextView
+        android:id="@+id/selected_file_path"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="No file selected"
+        android:textSize="18sp" />
+
+    <Button
+        android:id="@+id/denoise"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="64dp"
+        android:text="Denoise Video"
+        android:backgroundTint="@color/primary"
+        android:textColor="@color/white"/>
+
+</LinearLayout>

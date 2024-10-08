@@ -5,6 +5,9 @@ import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Switch
+import android.widget.TextView
+import androidx.core.content.ContextCompat
 
 // TODO: Rename parameter arguments, choose names that match
 // the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
@@ -34,7 +37,30 @@ class Live : Fragment() {
         savedInstanceState: Bundle?
     ): View? {
         // Inflate the layout for this fragment
-        return inflater.inflate(R.layout.fragment_live, container, false)
+        val view = inflater.inflate(R.layout.fragment_live, container, false)
+
+        // Reference to the Switch and TextView
+        val switch: Switch = view.findViewById(R.id.switch2)
+        val resultTextView: TextView = view.findViewById(R.id.state)
+
+        // Initial text for the TextView
+        resultTextView.text = "FilterShot is Paused"
+        resultTextView.setTextColor(ContextCompat.getColor(requireContext(), R.color.Error))
+
+        // Set a listener on the Switch to detect changes
+        switch.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked) {
+                // If the switch is turned on
+                resultTextView.text = "FilterShot is Currently Running"
+                resultTextView.setTextColor(ContextCompat.getColor(requireContext(), R.color.Go))
+            } else {
+                // If the switch is turned off
+                resultTextView.text = "FilterShot is Paused"
+                resultTextView.setTextColor(ContextCompat.getColor(requireContext(), R.color.Error))
+            }
+        }
+
+        return view
     }
 
     companion object {
@@ -46,7 +72,6 @@ class Live : Fragment() {
          * @param param2 Parameter 2.
          * @return A new instance of fragment Live.
          */
-        // TODO: Rename and change types and number of parameters
         @JvmStatic
         fun newInstance(param1: String, param2: String) =
             Live().apply {
