@@ -1,34 +1,41 @@
 package com.pup.filtershot
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Switch
 import android.widget.TextView
-import androidx.core.content.ContextCompat
+import android.widget.Toast
 
-// TODO: Rename parameter arguments, choose names that match
-// the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
-private const val ARG_PARAM1 = "param1"
-private const val ARG_PARAM2 = "param2"
+private const val CHANNEL_ID = "filtershot_channel"
+private const val NOTIFICATION_ID = 1
+private const val NOTIFICATION_PERMISSION_REQUEST_CODE = 101
+private const val PREFS_NAME = "FilterShotPrefs"
+private const val SWITCH_STATE_KEY = "switchState"
 
-/**
- * A simple [Fragment] subclass.
- * Use the [Live.newInstance] factory method to
- * create an instance of this fragment.
- */
 class Live : Fragment() {
-    // TODO: Rename and change types of parameters
-    private var param1: String? = null
-    private var param2: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        arguments?.let {
-            param1 = it.getString(ARG_PARAM1)
-            param2 = it.getString(ARG_PARAM2)
+
+        // Create notification channel if necessary
+        createNotificationChannel()
+
+        // Request notification permission for Android 13+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(requireContext(), android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), NOTIFICATION_PERMISSION_REQUEST_CODE)
+            }
         }
     }
 
@@ -43,42 +50,90 @@ class Live : Fragment() {
         val switch: Switch = view.findViewById(R.id.switch2)
         val resultTextView: TextView = view.findViewById(R.id.state)
 
-        // Initial text for the TextView
-        resultTextView.text = "FilterShot is Paused"
-        resultTextView.setTextColor(ContextCompat.getColor(requireContext(), R.color.Error))
+        // Load saved switch state from SharedPreferences
+        val sharedPreferences = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val switchState = sharedPreferences.getBoolean(SWITCH_STATE_KEY, false) // Default is false (off)
 
-        // Set a listener on the Switch to detect changes
+        // Set the switch's checked state based on saved preferences
+        switch.isChecked = switchState
+
+        // Update the TextView based on the switch state
+        if (switchState) {
+            resultTextView.text = "FilterShot is Currently Running"
+            resultTextView.setTextColor(ContextCompat.getColor(requireContext(), R.color.Go))
+        } else {
+            resultTextView.text = "FilterShot is Paused"
+            resultTextView.setTextColor(ContextCompat.getColor(requireContext(), R.color.Error))
+        }
+
+        // Set a listener on the Switch to detect changes and save the state
         switch.setOnCheckedChangeListener { _, isChecked ->
+            val editor = sharedPreferences.edit()
+            editor.putBoolean(SWITCH_STATE_KEY, isChecked)
+            editor.apply() // Save the switch state
+
+            // Update the TextView and notification
             if (isChecked) {
-                // If the switch is turned on
                 resultTextView.text = "FilterShot is Currently Running"
                 resultTextView.setTextColor(ContextCompat.getColor(requireContext(), R.color.Go))
+                showNotification("FilterShot is Currently Running")
             } else {
-                // If the switch is turned off
                 resultTextView.text = "FilterShot is Paused"
                 resultTextView.setTextColor(ContextCompat.getColor(requireContext(), R.color.Error))
+                showNotification("FilterShot is Paused")
             }
         }
 
         return view
     }
 
-    companion object {
-        /**
-         * Use this factory method to create a new instance of
-         * this fragment using the provided parameters.
-         *
-         * @param param1 Parameter 1.
-         * @param param2 Parameter 2.
-         * @return A new instance of fragment Live.
-         */
-        @JvmStatic
-        fun newInstance(param1: String, param2: String) =
-            Live().apply {
-                arguments = Bundle().apply {
-                    putString(ARG_PARAM1, param1)
-                    putString(ARG_PARAM2, param2)
-                }
+    // Show notification
+    private fun showNotification(message: String) {
+        Log.d("LiveFragment", "Preparing to show notification: $message")
+
+        val notificationManager = requireContext().getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        val notification = NotificationCompat.Builder(requireContext(), CHANNEL_ID)
+            .setSmallIcon(R.drawable.baseline_fiber_manual_record_24)  // Valid icon resource
+            .setContentTitle("FilterShot Status")
+            .setContentText(message)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .build()
+
+        notificationManager.notify(NOTIFICATION_ID, notification)
+        Log.d("LiveFragment", "Notification displayed: $message")
+    }
+
+    // Create a notification channel (required for Android 8.0 and above)
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val name = "FilterShot Channel"
+            val descriptionText = "Channel for FilterShot notifications"
+            val importance = NotificationManager.IMPORTANCE_DEFAULT
+            val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
+                description = descriptionText
             }
+            val notificationManager: NotificationManager =
+                requireContext().getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+            Log.d("LiveFragment", "Notification channel created: $CHANNEL_ID")
+        }
+    }
+
+    // Handle permission result for notifications (Android 13+)
+    override fun onRequestPermissionsResult(
+        requestCode: Int, permissions: Array<out String>, grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+
+        if (requestCode == NOTIFICATION_PERMISSION_REQUEST_CODE) {
+            if ((grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
+                Toast.makeText(requireContext(), "Notification permission granted", Toast.LENGTH_SHORT).show()
+                Log.d("LiveFragment", "Notification permission granted")
+            } else {
+                Toast.makeText(requireContext(), "Notification permission denied", Toast.LENGTH_SHORT).show()
+                Log.d("LiveFragment", "Notification permission denied")
+            }
+        }
     }
 }
