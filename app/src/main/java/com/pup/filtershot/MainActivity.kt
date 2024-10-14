@@ -1,6 +1,7 @@
 package com.pup.filtershot
 
 import android.os.Bundle
+import android.widget.CompoundButton
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import com.pup.filtershot.databinding.ActivityMainBinding
@@ -8,6 +9,7 @@ import com.pup.filtershot.databinding.ActivityMainBinding
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+    private lateinit var switchService: CompoundButton
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -25,7 +27,10 @@ class MainActivity : AppCompatActivity() {
             }
             true
         }
-    }
+
+
+
+        }
 
     private fun replaceFragment(fragment: Fragment) {
         val fragmentManager = supportFragmentManager

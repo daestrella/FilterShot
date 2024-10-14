@@ -1,8 +1,10 @@
 package com.pup.filtershot
 
+import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -16,6 +18,7 @@ import android.view.ViewGroup
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
+
 
 private const val CHANNEL_ID = "filtershot_channel"
 private const val NOTIFICATION_ID = 1
@@ -33,8 +36,8 @@ class Live : Fragment() {
 
         // Request notification permission for Android 13+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(requireContext(), android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), NOTIFICATION_PERMISSION_REQUEST_CODE)
+            if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), NOTIFICATION_PERMISSION_REQUEST_CODE)
             }
         }
     }
@@ -76,12 +79,27 @@ class Live : Fragment() {
             if (isChecked) {
                 resultTextView.text = "FilterShot is Currently Running"
                 resultTextView.setTextColor(ContextCompat.getColor(requireContext(), R.color.Go))
+
+                // Start the foreground service
+                val serviceIntent = Intent(requireContext(), MyForeground::class.java)
+                requireContext().startService(serviceIntent)
+                 // Use startForegroundService for API 26 and above
+
+                // Optionally show a notification immediately here
                 showNotification("FilterShot is Currently Running")
             } else {
                 resultTextView.text = "FilterShot is Paused"
                 resultTextView.setTextColor(ContextCompat.getColor(requireContext(), R.color.Error))
+
+                // Stop the foreground service
+                val serviceIntent = Intent(requireContext(), MyForeground::class.java)
+                requireContext().stopService(serviceIntent)
+
+                // Optionally show a notification immediately here
                 showNotification("FilterShot is Paused")
             }
+
+
         }
 
         return view
