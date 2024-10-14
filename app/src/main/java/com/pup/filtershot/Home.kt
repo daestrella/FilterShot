@@ -10,6 +10,15 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.TextView
+import android.media.MediaMetadataRetriever
+import org.opencv.core.Mat
+import org.opencv.android.Utils
+import org.opencv.videoio.VideoWriter
+import org.opencv.videoio.VideoWriter.fourcc
+import android.os.Environment
+import java.io.File
+import android.app.AlertDialog
+import android.widget.EditText
 
 private const val ARG_PARAM1 = "param1"
 private const val ARG_PARAM2 = "param2"
@@ -19,6 +28,7 @@ class Home : Fragment() {
     private var param1: String? = null
     private var param2: String? = null
     private lateinit var selectedFilePathTextView: TextView
+    private var videoUri: Uri? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,6 +68,7 @@ class Home : Fragment() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == PICK_FILE_REQUEST_CODE && resultCode == Activity.RESULT_OK) {
             data?.data?.let { uri ->
+                videoUri = uri
                 handleFileUri(uri)
             }
         }
@@ -66,6 +77,83 @@ class Home : Fragment() {
     private fun handleFileUri(uri: Uri) {
         val filePath = uri.path // Get the file path from the Uri
         selectedFilePathTextView.text = filePath ?: "No file selected" // Display the file path
+
+        showFilenameInputDialog()
+    }
+
+    private fun showFilenameInputDialog() {
+        val dialogBuilder = AlertDialog.Builder(requireContext())
+        val input = EditText(requireContext()).apply {
+            hint = "Enter filename"
+        }
+
+        dialogBuilder.setTitle("Save Video")
+            .setMessage("Enter a name for the processed video:")
+            .setView(input)
+            .setPositiveButton("OK") { dialog, _ ->
+                val filename = input.text.toString()
+                if (filename.isNotBlank() && videoUri != null) {
+                    processVideo(videoUri!!, filename)
+                }
+                dialog.dismiss()
+            }
+            .setNegativeButton("Cancel") { dialog, _ ->
+                dialog.dismiss()
+            }
+
+        val dialog = dialogBuilder.create()
+        dialog.show()
+    }
+
+    private fun processVideo(uri: Uri, filename: String) {
+        val retriever = MediaMetadataRetriever()
+        retriever.setDataSource(requireContext(), uri)
+
+        // Get video duration and frame rate
+        val videoDuration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong() ?: 0
+        val frameRate = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE)?.toInt() ?: 30
+
+        // Output video file path
+        val outputFilePath = File(Environment.getExternalStorageDirectory(), "$filename.mp4").absolutePath
+
+        // Initialize VideoWriter
+        val fourcc = fourcc('H', '2', '6', '4') // Codec
+        val videoWriter = VideoWriter(outputFilePath, fourcc, frameRate.toDouble(), org.opencv.core.Size(1280.0, 720.0), true)
+
+        if (!videoWriter.isOpened) {
+            println("Error: Could not open video writer.")
+            retriever.release()
+            return
+        }
+
+        // Process each frame of the video
+        var currentTimeUs = 0L
+        while (currentTimeUs < videoDuration * 1000) { // Convert duration to microseconds
+            val frameBitmap = retriever.getFrameAtTime(currentTimeUs, MediaMetadataRetriever.OPTION_CLOSEST)
+
+            if (frameBitmap != null) {
+                val frameMat = Mat()
+                Utils.bitmapToMat(frameBitmap, frameMat)
+
+                // Process the frame using your Filter class
+                val filter = Filter(requireContext())
+                val processedFrame = filter.filterFrame(frameMat)
+
+                // Write the processed frame to the video
+                videoWriter.write(processedFrame)
+
+                // Move to the next frame based on the frame rate
+                currentTimeUs += (1000000L / frameRate) // Increment by the duration of one frame in microseconds
+            } else {
+                break // Exit if no more frames are available
+            }
+        }
+
+        // Cleanup
+        videoWriter.release()
+        retriever.release()
+
+        selectedFilePathTextView.text = "Processed video saved to: $outputFilePath"
     }
 
     companion object {

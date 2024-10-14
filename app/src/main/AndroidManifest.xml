@@ -6,6 +6,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-feature android:name="android.hardware.camera" />
@@ -37,9 +38,9 @@
         </activity>
 
         <!-- BroadcastReceiver for Notification Action -->
-        <receiver android:name=".NotificationActionReceiver"
+        <!--<receiver android:name=".NotificationActionReceiver"
             android:exported="false" />
-
+        -->
     </application>
 
 </manifest>
