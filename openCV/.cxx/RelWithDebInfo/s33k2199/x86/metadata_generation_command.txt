@@ -1,0 +1,19 @@
+                        -H/home/dturbo/Academic/Thesis/FilterShot/openCV/libcxx_helper
+-DCMAKE_SYSTEM_NAME=Android
+-DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+-DCMAKE_SYSTEM_VERSION=21
+-DANDROID_PLATFORM=android-21
+-DANDROID_ABI=x86
+-DCMAKE_ANDROID_ARCH_ABI=x86
+-DANDROID_NDK=/home/dturbo/Android/Sdk/ndk/26.1.10909125
+-DCMAKE_ANDROID_NDK=/home/dturbo/Android/Sdk/ndk/26.1.10909125
+-DCMAKE_TOOLCHAIN_FILE=/home/dturbo/Android/Sdk/ndk/26.1.10909125/build/cmake/android.toolchain.cmake
+-DCMAKE_MAKE_PROGRAM=/home/dturbo/Android/Sdk/cmake/3.22.1/bin/ninja
+-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=/home/dturbo/Academic/Thesis/FilterShot/openCV/build/intermediates/cxx/RelWithDebInfo/s33k2199/obj/x86
+-DCMAKE_RUNTIME_OUTPUT_DIRECTORY=/home/dturbo/Academic/Thesis/FilterShot/openCV/build/intermediates/cxx/RelWithDebInfo/s33k2199/obj/x86
+-DCMAKE_BUILD_TYPE=RelWithDebInfo
+-B/home/dturbo/Academic/Thesis/FilterShot/openCV/.cxx/RelWithDebInfo/s33k2199/x86
+-GNinja
+-DANDROID_STL=c++_shared
+                        Build command args: []
+                        Version: 2

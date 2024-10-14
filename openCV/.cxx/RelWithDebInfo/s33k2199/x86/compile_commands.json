@@ -1,0 +1,7 @@
+[
+{
+  "directory": "/home/dturbo/Academic/Thesis/FilterShot/openCV/.cxx/RelWithDebInfo/s33k2199/x86",
+  "command": "/home/dturbo/Android/Sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=i686-none-linux-android21 --sysroot=/home/dturbo/Android/Sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/sysroot -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -mstackrealign -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -O2 -g -DNDEBUG -fPIC -o CMakeFiles/opencv_jni_shared.dir/dummy.cpp.o -c /home/dturbo/Academic/Thesis/FilterShot/openCV/libcxx_helper/dummy.cpp",
+  "file": "/home/dturbo/Academic/Thesis/FilterShot/openCV/libcxx_helper/dummy.cpp"
+}
+]

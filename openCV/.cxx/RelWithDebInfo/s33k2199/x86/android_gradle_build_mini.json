@@ -1,0 +1,27 @@
+{
+  "buildFiles": [
+    "/home/dturbo/Academic/Thesis/FilterShot/openCV/libcxx_helper/CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "/home/dturbo/Android/Sdk/cmake/3.22.1/bin/ninja",
+      "-C",
+      "/home/dturbo/Academic/Thesis/FilterShot/openCV/.cxx/RelWithDebInfo/s33k2199/x86",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "/home/dturbo/Android/Sdk/cmake/3.22.1/bin/ninja",
+    "-C",
+    "/home/dturbo/Academic/Thesis/FilterShot/openCV/.cxx/RelWithDebInfo/s33k2199/x86",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {
+    "opencv_jni_shared::@6890427a1f51a3e7e1df": {
+      "artifactName": "opencv_jni_shared",
+      "abi": "x86",
+      "output": "/home/dturbo/Academic/Thesis/FilterShot/openCV/.cxx/RelWithDebInfo/s33k2199/x86/libopencv_jni_shared.a",
+      "runtimeFiles": []
+    }
+  }
+}
