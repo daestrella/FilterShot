@@ -18,7 +18,14 @@ import org.opencv.videoio.VideoWriter.fourcc
 import android.os.Environment
 import java.io.File
 import android.app.AlertDialog
+import android.util.Log
 import android.widget.EditText
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.opencv.core.CvType
+import org.opencv.imgproc.Imgproc
 
 private const val ARG_PARAM1 = "param1"
 private const val ARG_PARAM2 = "param2"
@@ -75,9 +82,16 @@ class Home : Fragment() {
     }
 
     private fun handleFileUri(uri: Uri) {
-        val filePath = uri.path // Get the file path from the Uri
-        selectedFilePathTextView.text = filePath ?: "No file selected" // Display the file path
-
+        Log.d("FileURI", "Selected URI: $uri")
+        val inputStream = requireContext().contentResolver.openInputStream(uri)
+        inputStream?.let {
+            // Use inputStream as needed, e.g., read bytes or process file
+            // Don't forget to close the inputStream after use
+            it.close()
+        } ?: run {
+            Log.e("FileAccess", "Failed to open InputStream for URI: $uri")
+        }
+        // Proceed with showing filename dialog
         showFilenameInputDialog()
     }
 
@@ -106,55 +120,82 @@ class Home : Fragment() {
     }
 
     private fun processVideo(uri: Uri, filename: String) {
-        val retriever = MediaMetadataRetriever()
-        retriever.setDataSource(requireContext(), uri)
+        GlobalScope.launch(Dispatchers.IO) {
+            val retriever = MediaMetadataRetriever()
+            retriever.setDataSource(requireContext(), uri)
 
-        // Get video duration and frame rate
-        val videoDuration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong() ?: 0
-        val frameRate = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE)?.toInt() ?: 30
+            // Get video duration and frame rate
+            val videoDuration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong() ?: 0
+            val frameRate = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE)?.toInt() ?: 24
 
-        // Output video file path
-        val outputFilePath = File(Environment.getExternalStorageDirectory(), "$filename.mp4").absolutePath
+            // Output video file path
+            val outputFilePath = File(requireContext().getExternalFilesDir(null), "$filename.mp4").absolutePath
+            val filter = Filter(requireContext())
 
-        // Initialize VideoWriter
-        val fourcc = fourcc('H', '2', '6', '4') // Codec
-        val videoWriter = VideoWriter(outputFilePath, fourcc, frameRate.toDouble(), org.opencv.core.Size(1280.0, 720.0), true)
+            // Initialize VideoWriter
+            val fourcc = VideoWriter.fourcc('H', '2', '6', '4') // Codec
+            val videoWriter = VideoWriter(outputFilePath, fourcc, frameRate.toDouble(), org.opencv.core.Size(1280.0, 720.0), true)
 
-        if (!videoWriter.isOpened) {
-            println("Error: Could not open video writer.")
+            if (!videoWriter.isOpened) {
+                println("Error: Could not open video writer.")
+                retriever.release()
+                return@launch
+            }
+
+            // Process each frame of the video
+            var currentTimeUs = 0L
+            while (currentTimeUs < videoDuration * 1000) { // Convert duration to microseconds
+                val frameBitmap = retriever.getFrameAtTime(currentTimeUs, MediaMetadataRetriever.OPTION_CLOSEST)
+
+                if (frameBitmap != null) {
+                    Log.d("Home", "Frame dimensions: ${frameBitmap.width} x ${frameBitmap.height}")
+                }
+
+                if (frameBitmap != null && frameBitmap.width > 0 && frameBitmap.height > 0) {
+
+                    val frameMat = Mat(frameBitmap.height, frameBitmap.width, CvType.CV_8UC4)
+                    Utils.bitmapToMat(frameBitmap, frameMat)
+                    // Convert from CV_8UC4 to CV_8UC3 if needed
+                    val processedMat = Mat()
+                    Imgproc.cvtColor(frameMat, processedMat, Imgproc.COLOR_RGBA2BGR)
+
+                    // Check if the frame is of the expected type
+                    if (frameMat.type() != org.opencv.core.CvType.CV_8UC3) {
+                        frameMat.convertTo(frameMat, org.opencv.core.CvType.CV_8UC3)
+                    }
+
+                    // Process the frame using your Filter class
+                    val processedFrame = filter.filterFrame(frameMat)
+
+                    // Ensure frame is of the correct size and type before writing
+                    if (processedFrame.width() <= 1280 && processedFrame.height() <= 720 && processedFrame.type() == org.opencv.core.CvType.CV_8UC3) {
+                        videoWriter.write(processedFrame)
+                    } else {
+                        Log.e("MatTypeError", "Invalid frame size or type")
+                        break // Exit if the frame is not suitable
+                    }
+
+                    // Move to the next frame based on the frame rate
+                    currentTimeUs += (1000000L / frameRate) // Increment by the duration of one frame in microseconds
+                } else {
+                    Log.e("MatTypeError", "No valid frame at $currentTimeUs")
+                    break // Exit if no more frames are available
+                }
+            }
+
+
+            // Cleanup
+            videoWriter.release()
             retriever.release()
-            return
-        }
+            filter.close()
 
-        // Process each frame of the video
-        var currentTimeUs = 0L
-        while (currentTimeUs < videoDuration * 1000) { // Convert duration to microseconds
-            val frameBitmap = retriever.getFrameAtTime(currentTimeUs, MediaMetadataRetriever.OPTION_CLOSEST)
-
-            if (frameBitmap != null) {
-                val frameMat = Mat()
-                Utils.bitmapToMat(frameBitmap, frameMat)
-
-                // Process the frame using your Filter class
-                val filter = Filter(requireContext())
-                val processedFrame = filter.filterFrame(frameMat)
-
-                // Write the processed frame to the video
-                videoWriter.write(processedFrame)
-
-                // Move to the next frame based on the frame rate
-                currentTimeUs += (1000000L / frameRate) // Increment by the duration of one frame in microseconds
-            } else {
-                break // Exit if no more frames are available
+            // Update UI on the main thread
+            withContext(Dispatchers.Main) {
+                selectedFilePathTextView.text = "Processed video saved to: $outputFilePath"
             }
         }
-
-        // Cleanup
-        videoWriter.release()
-        retriever.release()
-
-        selectedFilePathTextView.text = "Processed video saved to: $outputFilePath"
     }
+
 
     companion object {
         @JvmStatic
