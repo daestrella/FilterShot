@@ -7,8 +7,8 @@
     <item android:title="Live"
         android:id="@+id/live"
         android:icon="@drawable/baseline_live_tv_24"/>
-    <item android:title="Record"
+    <!--<item android:title="Record"
         android:id="@+id/record"
-        android:icon="@drawable/baseline_fiber_manual_record_24"/>
+        android:icon="@drawable/baseline_fiber_manual_record_24"/> -->
 
 </menu>

@@ -104,9 +104,10 @@ class Home : Fragment() {
         dialogBuilder.setTitle("Save Video")
             .setMessage("Enter a name for the processed video:")
             .setView(input)
-            .setPositiveButton("OK") { dialog, _ ->
+            .setPositiveButton("Denoise") { dialog, _ ->
                 val filename = input.text.toString()
                 if (filename.isNotBlank() && videoUri != null) {
+                    selectedFilePathTextView.text = "Denoising the Video..."
                     processVideo(videoUri!!, filename)
                 }
                 dialog.dismiss()

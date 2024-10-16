@@ -22,7 +22,7 @@ class MainActivity : AppCompatActivity() {
             when (item.itemId) {
                 R.id.home -> replaceFragment(Home())
                 R.id.live -> replaceFragment(Live())
-                R.id.record -> replaceFragment(Record())
+                //R.id.record -> replaceFragment(Record())
                 else -> {}
             }
             true

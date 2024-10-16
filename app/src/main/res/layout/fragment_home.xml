@@ -25,13 +25,13 @@
         android:text="No file selected"
         android:textSize="18sp" />
 
-    <Button
+    <!--<Button
         android:id="@+id/denoise"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="64dp"
         android:text="Denoise Video"
         android:backgroundTint="@color/primary"
-        android:textColor="@color/white"/>
+        android:textColor="@color/white"/>-->
 
 </LinearLayout>
