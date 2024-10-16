@@ -62,7 +62,7 @@ class Filter(context: Context) {
                 Log.e("", "CVType<specific> = ${CvType.CV_32FC3}")
             }
             CvType.CV_32FC4 -> {
-                // Convert from grayscale to RGB
+                // Convert from RGBA to RGB
                 val convertedFrame = Mat()
                 Imgproc.cvtColor(landscapeFrame, convertedFrame, Imgproc.COLOR_RGBA2BGR)
                 return filterFrame(convertedFrame) // Recur with the converted frame
@@ -82,15 +82,10 @@ class Filter(context: Context) {
 
         // Proceed with the filtering logic
         val output = FloatArray(landscapeFrame.rows() * landscapeFrame.cols() * landscapeFrame.channels())
-        //val output =Array(landscapeFrame.rows()) { Array(landscapeFrame.cols()) { FloatArray(landscapeFrame.channels()) }}
         landscapeFrame.get(0, 0, output)
 
-        // Normalize pixel values if your model expects values between 0 and 1
-        for (i in output.indices) {
-            output[i] /= 255.0f
-        }
-
-        val output3D = Array(1){
+        // Instead of dividing the values by 255 here, we process them directly.
+        val output3D = Array(1) {
             Array(landscapeFrame.rows()) { row ->
                 Array(landscapeFrame.cols()) { col ->
                     FloatArray(landscapeFrame.channels()) { channel ->
@@ -99,30 +94,41 @@ class Filter(context: Context) {
                 }
             }
         }
-        val filteredOutput = Array(1){Array(landscapeFrame.rows()) { Array(landscapeFrame.cols()) { FloatArray(landscapeFrame.channels())}}}
-        //val filteredOutput = FloatArray(720 * 1280 * 3) // Adjust size as necessary
+
+        val filteredOutput = Array(1) {
+            Array(landscapeFrame.rows()) {
+                Array(landscapeFrame.cols()) { FloatArray(landscapeFrame.channels()) }
+            }
+        }
+
         interpreter?.run(output3D, filteredOutput)
 
+        // Create an array for the Mat's output, converting directly to floating point values
         val outputMatArray = FloatArray(landscapeFrame.rows() * landscapeFrame.cols() * landscapeFrame.channels())
 
         for (row in filteredOutput[0].indices) {
             for (col in filteredOutput[0][row].indices) {
                 for (channel in filteredOutput[0][row][col].indices) {
+                    // Write the floating-point values directly to the array without rescaling by 255
                     outputMatArray[row * landscapeFrame.cols() * landscapeFrame.channels() + col * landscapeFrame.channels() + channel] =
-                        filteredOutput[0][row][col][channel] * 255
+                        filteredOutput[0][row][col][channel]
                 }
             }
         }
-        val outputMat = Mat(720, 1280, CvType.CV_32FC3)
+
+        // Create the output Mat in the correct type (still floating-point)
+        val outputMat = Mat(landscapeFrame.rows(), landscapeFrame.cols(), CvType.CV_32FC3)
         outputMat.put(0, 0, outputMatArray)
 
-        val convertedoutputMat = Mat()
-        outputMat.convertTo(convertedoutputMat, CvType.CV_8UC3, 255.0)
+        // Optionally convert back to 8-bit if needed for display or further processing
+        val convertedOutputMat = Mat()
+        outputMat.convertTo(convertedOutputMat, CvType.CV_8UC3, 255.0)
 
         // Cleanup
         landscapeFrame.release() // Release if no longer needed
-        return convertedoutputMat
+        return convertedOutputMat
     }
+
 
     fun close() {
         interpreter?.close()
