@@ -57,42 +57,32 @@ class Filter(context: Context) {
 
         // Check the frame type and convert if necessary
         when (landscapeFrame.type()) {
-            CvType.CV_8UC3 -> {
+            CvType.CV_32FC3 -> {
                 // Already in the expected format, proceed with processing
+                Log.e("", "CVType<specific> = ${CvType.CV_32FC3}")
             }
-            CvType.CV_8UC1 -> {
+            CvType.CV_32FC4 -> {
                 // Convert from grayscale to RGB
                 val convertedFrame = Mat()
-                Imgproc.cvtColor(landscapeFrame, convertedFrame, Imgproc.COLOR_GRAY2BGR)
-                return filterFrame(convertedFrame) // Recur with the converted frame
-            }
-            CvType.CV_32FC3 -> {
-                // If it's in float format, convert to CV_8UC3
-                val convertedFrame = Mat()
-                landscapeFrame.convertTo(convertedFrame, CvType.CV_8UC3)
+                Imgproc.cvtColor(landscapeFrame, convertedFrame, Imgproc.COLOR_RGBA2BGR)
                 return filterFrame(convertedFrame) // Recur with the converted frame
             }
             CvType.CV_8UC4 -> {
                 // Convert from RGBA to RGB (strip the alpha channel)
                 Log.e("", "CVType<specific> = ${CvType.CV_8UC4}")
                 val convertedFrame = Mat()
-                Imgproc.cvtColor(landscapeFrame, convertedFrame, Imgproc.COLOR_RGBA2BGR)
+                landscapeFrame.convertTo(convertedFrame, CvType.CV_32F, 1.0 / 255.0f) // Normalize to range [0, 1]
                 return filterFrame(convertedFrame) // Recur with the converted frame
-            }
-            Videoio.CAP_PROP_TRIGGER -> {
-                Log.e("","CAP_PROP_TRIGGER")
             }
             else -> {
                 Log.e("MatTypeError", "Unsupported frame type: ${landscapeFrame.type()}")
-                Log.e("", "CVType<specific> = ${CvType.CV_8UC3}")
-                Log.e("", "CVType<specific> = ${CvType.CV_8UC1}")
-                Log.e("", "CVType<specific> = ${CvType.CV_32FC3}")
                 return Mat() // Return an empty Mat or handle error appropriately
             }
         }
 
         // Proceed with the filtering logic
         val output = FloatArray(landscapeFrame.rows() * landscapeFrame.cols() * landscapeFrame.channels())
+        //val output =Array(landscapeFrame.rows()) { Array(landscapeFrame.cols()) { FloatArray(landscapeFrame.channels()) }}
         landscapeFrame.get(0, 0, output)
 
         // Normalize pixel values if your model expects values between 0 and 1
@@ -100,15 +90,38 @@ class Filter(context: Context) {
             output[i] /= 255.0f
         }
 
-        val filteredOutput = FloatArray(720 * 1280 * 3) // Adjust size as necessary
-        interpreter?.run(output, filteredOutput)
+        val output3D = Array(1){
+            Array(landscapeFrame.rows()) { row ->
+                Array(landscapeFrame.cols()) { col ->
+                    FloatArray(landscapeFrame.channels()) { channel ->
+                        output[row * landscapeFrame.cols() * landscapeFrame.channels() + col * landscapeFrame.channels() + channel]
+                    }
+                }
+            }
+        }
+        val filteredOutput = Array(1){Array(landscapeFrame.rows()) { Array(landscapeFrame.cols()) { FloatArray(landscapeFrame.channels())}}}
+        //val filteredOutput = FloatArray(720 * 1280 * 3) // Adjust size as necessary
+        interpreter?.run(output3D, filteredOutput)
 
+        val outputMatArray = FloatArray(landscapeFrame.rows() * landscapeFrame.cols() * landscapeFrame.channels())
+
+        for (row in filteredOutput[0].indices) {
+            for (col in filteredOutput[0][row].indices) {
+                for (channel in filteredOutput[0][row][col].indices) {
+                    outputMatArray[row * landscapeFrame.cols() * landscapeFrame.channels() + col * landscapeFrame.channels() + channel] =
+                        filteredOutput[0][row][col][channel] * 255
+                }
+            }
+        }
         val outputMat = Mat(720, 1280, CvType.CV_32FC3)
-        outputMat.put(0, 0, filteredOutput)
+        outputMat.put(0, 0, outputMatArray)
+
+        val convertedoutputMat = Mat()
+        outputMat.convertTo(convertedoutputMat, CvType.CV_8UC3, 255.0)
 
         // Cleanup
         landscapeFrame.release() // Release if no longer needed
-        return outputMat
+        return convertedoutputMat
     }
 
     fun close() {
