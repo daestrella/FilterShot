@@ -25,7 +25,10 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.opencv.core.CvType
+import org.opencv.core.Core
 import org.opencv.imgproc.Imgproc
+import org.pytorch.Tensor
+import android.graphics.Bitmap
 
 private const val ARG_PARAM1 = "param1"
 private const val ARG_PARAM2 = "param2"
@@ -128,62 +131,61 @@ class Home : Fragment() {
             // Get video duration and frame rate
             val videoDuration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong() ?: 0
             val frameRate = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE)?.toInt() ?: 24
+            val vidBatchSize = 4
 
             // Output video file path
-            val outputFilePath = File(requireContext().getExternalFilesDir(null), "$filename.mp4").absolutePath
+            val segmentedFilePath = File(requireContext().getExternalFilesDir(null), "$filename-segmented.mp4").absolutePath
+            val denoisedFilePath = File(requireContext().getExternalFilesDir(null), "$filename-denoised.mp4").absolutePath
             val filter = Filter(requireContext())
 
             // Initialize VideoWriter
             val fourcc = VideoWriter.fourcc('H', '2', '6', '4') // Codec
-            val videoWriter = VideoWriter(outputFilePath, fourcc, frameRate.toDouble(), org.opencv.core.Size(1280.0, 720.0), true)
+            val segmentedVideoWriter = VideoWriter(segmentedFilePath, fourcc, frameRate.toDouble(), org.opencv.core.Size(1280.0, 720.0), true)
+            val denoisedVideoWriter = VideoWriter(denoisedFilePath, fourcc, frameRate.toDouble(), org.opencv.core.Size(1280.0, 720.0), true)
 
             if (!videoWriter.isOpened) {
-                println("Error: Could not open video writer.")
                 retriever.release()
                 return@launch
             }
 
-            // Process each frame of the video
-            var currentTimeUs = 0L
-            while (currentTimeUs < videoDuration * 1000) { // Convert duration to microseconds
-                val frameBitmap = retriever.getFrameAtTime(currentTimeUs, MediaMetadataRetriever.OPTION_CLOSEST)
+            val totalFrames = (videoDuration / (1000 / frameRate)).toInt()
+            val frameBatches = (totalFrames / vidBatchSize).coerceAtMost(totalFrames)
 
-                if (frameBitmap != null) {
+            for (batch in 0 until frameBatches) {
+                val frameBatch = mutableListOf<Mat>()
+
+                for (frame in 0 until vidBatchSize) {
+                    val currentFrameTimeUs = ((vidBatchSize * batch) + frame) * 1000L
+                    val frameBitmap = retriever.getFrameAtTime(currentFrameTimeUs, MediaMetadataRetriever.OPTION_CLOSEST)
+
+                    if (frameBitmap == null) {
+                        Log.w("BitmapInfo", "No bitmap is loaded for time $currentFrameTimeUs")
+                        break
+                    }
+
                     Log.d("Home", "Frame dimensions: ${frameBitmap.width} x ${frameBitmap.height}")
+
+                    var frameMatrix = Mat(frameBitmap.height, frameBitmap.width, CvType.CV_32FC3)
+                    Utils.bitmapToMat(frameBitmap, frameMatrix)
+                    frameMatrix.convertTo(frameMatrix, CvType.CV_32F, 1.0 / 255.0f)
+
+                    frameBatch.add(frameMatrix)
                 }
 
-                if (frameBitmap != null && frameBitmap.width > 0 && frameBitmap.height > 0) {
+                val (segmentedBatch, denoisedBatch) = filter.filterFrames(frameBatch)
 
-                    val frameMat = Mat(frameBitmap.height, frameBitmap.width, CvType.CV_8UC4)
-                    Utils.bitmapToMat(frameBitmap, frameMat)
-                    // Convert from CV_8UC4 to CV_8UC3 if needed
-                    val processedMat = Mat()
-                    Imgproc.cvtColor(frameMat, processedMat, Imgproc.COLOR_RGBA2BGR)
-
-                    // Check if the frame is of the expected type
-                    if (frameMat.type() != org.opencv.core.CvType.CV_8UC3) {
-                        frameMat.convertTo(frameMat, org.opencv.core.CvType.CV_8UC3)
-                    }
-
-                    // Process the frame using your Filter class
-                    val processedFrame = filter.filterFrame(frameMat)
-
-                    // Ensure frame is of the correct size and type before writing
-                    if (processedFrame.width() <= 1280 && processedFrame.height() <= 720 && processedFrame.type() == org.opencv.core.CvType.CV_8UC3) {
-                        videoWriter.write(processedFrame)
-                    } else {
-                        Log.e("MatTypeError", "Invalid frame size or type")
-                        break // Exit if the frame is not suitable
-                    }
-
-                    // Move to the next frame based on the frame rate
-                    currentTimeUs += (1000000L / frameRate) // Increment by the duration of one frame in microseconds
-                } else {
-                    Log.e("MatTypeError", "No valid frame at $currentTimeUs")
-                    break // Exit if no more frames are available
+                for (frame in denoisedBatch) {
+                    denoisedVideoWriter.write(frame)
+                    frame.release()
                 }
+
+                for (frame in segmentedBatch) {
+                    segmentedVideoWriter.write(frame)
+                    frame.release()
+                }
+
+                frameBatch.forEach { it.release() }
             }
-
 
             // Cleanup
             videoWriter.release()
@@ -192,11 +194,34 @@ class Home : Fragment() {
 
             // Update UI on the main thread
             withContext(Dispatchers.Main) {
-                selectedFilePathTextView.text = "Processed video saved to: $outputFilePath"
+                selectedFilePathTextView.text = "Denoised video saved to: $denoisedFilePath\nSegmented video saved to: $segmentedFilePath"
             }
         }
     }
 
+    // Method to normalize the Mat
+    private fun normalizeMat(mat: Mat) {
+        mat.convertTo(mat, CvType.CV_32F) // Convert to float type
+        Core.normalize(mat, mat, 0.0, 1.0, Core.NORM_MINMAX) // Normalize to [0, 1]
+    }
+
+    // Method to convert Mat to Tensor
+    private fun matToTensor(mat: Mat): Tensor {
+        // Ensure the Mat is of type CV_32F (float)
+        if (mat.type() != CvType.CV_32F) {
+            mat.convertTo(mat, CvType.CV_32F) // Convert to float type if needed
+        }
+
+        // Get size and create a tensor
+        val size = mat.size()
+        val tensor = Tensor.empty(size.height.toInt(), size.width.toInt(), mat.channels())
+
+        // Copy data from Mat to the tensor
+        mat.get(0, 0, tensor.dataPointer()) // Assuming mat is in the format that matches tensor
+
+        // Reshape tensor to 4D: (1, width, height, channels)
+        return tensor.unsqueeze(0) // Adding batch dimension
+    }
 
     companion object {
         @JvmStatic

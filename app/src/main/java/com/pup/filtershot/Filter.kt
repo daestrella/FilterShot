@@ -6,18 +6,14 @@ import org.opencv.core.Mat
 import android.content.Context
 import android.util.Log
 import org.opencv.core.Core
-import org.opencv.imgproc.Imgproc
-import org.opencv.videoio.Videoio
-import org.opencv.videoio.Videoio.CAP_PROP_TRIGGER
-import org.tensorflow.lite.Interpreter
-import java.io.BufferedInputStream
-import java.nio.MappedByteBuffer
-import java.nio.channels.FileChannel
-import java.io.FileInputStream
+import org.pytorch.LiteModuleLoader
+import org.pytorch.Module
+import org.pytorch.Tensor
+import org.pytorch.IValue
 
 class Filter(context: Context) {
     private var openCVInitialized = false
-    private var interpreter: Interpreter? = null
+    private var model: Module? = null
 
     init {
         if (!openCVInitialized) {
@@ -28,110 +24,108 @@ class Filter(context: Context) {
                 println("OpenCV initialized successfully.")
             }
         }
-
-        interpreter = Interpreter(loadModelFile(context))
-    }
-
-    private fun loadModelFile(context: Context): MappedByteBuffer {
-        val assetFileDescriptor = context.assets.openFd("filtershot.tflite")
-        val inputStream = FileInputStream(assetFileDescriptor.fileDescriptor)
-        val fileChannel = (inputStream as FileInputStream).channel
-        return fileChannel.map(FileChannel.MapMode.READ_ONLY, assetFileDescriptor.startOffset, assetFileDescriptor.declaredLength)
-    }
-
-    private fun ensureImgIsLandscape(img: Mat): Mat {
-        return if (img.rows() < img.cols()) {
-            img
-        } else {
-            val rotatedImg = Mat()
-            Core.rotate(img, rotatedImg, Core.ROTATE_90_CLOCKWISE)
-            rotatedImg
+        try {
+            model = LiteModuleLoader.load("model.ptl")
+        } catch (e: Exception) {
+            Log.e("Filter", "Failed to load model: ${e.message}")
         }
     }
 
-    fun filterFrame(frame: Mat): Mat {
-        val landscapeFrame = ensureImgIsLandscape(frame)
+    private fun isImgLandscape(img: Mat): Boolean {
+        return img.rows() < img.cols()
+    }
+
+    private fun convertImgToLandscape(img: Mat): Mat {
+        val rotatedImg = Mat()
+        Core.rotate(img, rotatedImg, Core.ROTATE_90_COUNTERCLOCKWISE)
+        return rotatedImg
+    }
+
+    private fun convertImgBackToPortrait(img: Mat): Mat {
+        val rotatedImg = Mat()
+        Core.rotate(img, rotatedImg, Core.ROTATE_90_CLOCKWISE)
+        return rotatedImg
+    }
+
+    private fun convertMatToTensor(mat: Mat): Tensor {
+        val height = mat.rows()
+        val width = mat.cols()
+        val channels = mat.channels()
+        val array = FloatArray(height * width * channels)
+
+        // Convert Mat to FloatArray
+        for (i in 0 until height) {
+            for (j in 0 until width) {
+                val pixelValues = mat.get(i, j) // Returns an array of channel values (e.g., [R, G, B] for 3 channels)
+
+                for (k in 0 until channels) {
+                    array[(((i * width) + j) * channels) + k] = pixelValues[k].toFloat() / 255.0f // Normalize if needed
+                }
+            }
+        }
+
+        // Convert FloatArray to Tensor
+        return Tensor.fromBlob(array, longArrayOf(1, height.toLong(), width.toLong(), channels.toLong()))
+    }
+
+    fun filterFrames(frames: MutableList<Mat>): Pair<MutableList<Mat>, MutableList<Mat>> {
+        val isLandscape = isImgLandscape(frames[0])
+        val inputTensors = frames.map {
+            val img = if (isLandscape) it else convertImgToLandscape(it)
+            convertMatToTensor(img)
+        }
+
+        val inputTensor = Tensor.stack(inputTensors.toTypedArray())
 
         // Log the type of the landscape frame
-        Log.d("MatInfo", "Type: ${landscapeFrame.type()}")
+        Log.d("MatInfo", "Type: ${frames[0].type()}")
 
-        // Check the frame type and convert if necessary
-        when (landscapeFrame.type()) {
-            CvType.CV_32FC3 -> {
-                // Already in the expected format, proceed with processing
-                Log.e("", "CVType<specific> = ${CvType.CV_32FC3}")
-            }
-            CvType.CV_32FC4 -> {
-                // Convert from RGBA to RGB
-                val convertedFrame = Mat()
-                Imgproc.cvtColor(landscapeFrame, convertedFrame, Imgproc.COLOR_RGBA2BGR)
-                return filterFrame(convertedFrame) // Recur with the converted frame
-            }
-            CvType.CV_8UC4 -> {
-                // Convert from RGBA to RGB (strip the alpha channel)
-                Log.e("", "CVType<specific> = ${CvType.CV_8UC4}")
-                val convertedFrame = Mat()
-                landscapeFrame.convertTo(convertedFrame, CvType.CV_32F, 1.0 / 255.0f) // Normalize to range [0, 1]
-                return filterFrame(convertedFrame) // Recur with the converted frame
-            }
-            else -> {
-                Log.e("MatTypeError", "Unsupported frame type: ${landscapeFrame.type()}")
-                return Mat() // Return an empty Mat or handle error appropriately
-            }
-        }
+        val outputs = model?.forward(IValue.from(inputTensor))?.toTuple()
+        val denoisedTensor = outputs?.get(0)?.toTensor()
+        val segmentedTensor = outputs?.get(1)?.toTensor()
 
-        // Proceed with the filtering logic
-        val output = FloatArray(landscapeFrame.rows() * landscapeFrame.cols() * landscapeFrame.channels())
-        landscapeFrame.get(0, 0, output)
+        val segmentedList = mutableListOf<Mat>()
+        val denoisedList = mutableListOf<Mat>()
 
-        // Instead of dividing the values by 255 here, we process them directly.
-        val output3D = Array(1) {
-            Array(landscapeFrame.rows()) { row ->
-                Array(landscapeFrame.cols()) { col ->
-                    FloatArray(landscapeFrame.channels()) { channel ->
-                        output[row * landscapeFrame.cols() * landscapeFrame.channels() + col * landscapeFrame.channels() + channel]
-                    }
-                }
+        segmentedList?.let {
+            val outputArray = it.dataAsFloatArray
+            val width = frames[0].cols()
+            val height = frames[0].rows()
+
+            for (i in frames.indices) {
+                val outputMat = Mat(height, width, CvType.CV_32FC3)
+                outputMat.put(0, 0, outputArray, i * height * width * 3, height * width * 3)
+
+                val finalMat = Mat()
+                outputMat.convertTo(finalMat, CvType.CV_8UC3, 255.0)
+
+                // Rotate back to portrait if originally in portrait mode
+                segmentedList.add(if (isLandscape) finalMat else convertImgBackToPortrait(finalMat))
             }
         }
 
-        val filteredOutput = Array(1) {
-            Array(landscapeFrame.rows()) {
-                Array(landscapeFrame.cols()) { FloatArray(landscapeFrame.channels()) }
+        denoisedList?.let {
+            val outputArray = it.dataAsFloatArray
+            val width = frames[0].cols()
+            val height = frames[0].rows()
+
+            for (i in frames.indices) {
+                val outputMat = Mat(height, width, CvType.CV_32FC3)
+                outputMat.put(0, 0, outputArray, i * height * width * 3, height * width * 3)
+
+                val finalMat = Mat()
+                outputMat.convertTo(finalMat, CvType.CV_8UC3, 255.0)
+
+                // Rotate back to portrait if originally in portrait mode
+                denoisedList.add(if (isLandscape) finalMat else convertImgBackToPortrait(finalMat))
             }
         }
 
-        interpreter?.run(output3D, filteredOutput)
-
-        // Create an array for the Mat's output, converting directly to floating point values
-        val outputMatArray = FloatArray(landscapeFrame.rows() * landscapeFrame.cols() * landscapeFrame.channels())
-
-        for (row in filteredOutput[0].indices) {
-            for (col in filteredOutput[0][row].indices) {
-                for (channel in filteredOutput[0][row][col].indices) {
-                    // Write the floating-point values directly to the array without rescaling by 255
-                    outputMatArray[row * landscapeFrame.cols() * landscapeFrame.channels() + col * landscapeFrame.channels() + channel] =
-                        filteredOutput[0][row][col][channel]
-                }
-            }
-        }
-
-        // Create the output Mat in the correct type (still floating-point)
-        val outputMat = Mat(landscapeFrame.rows(), landscapeFrame.cols(), CvType.CV_32FC3)
-        outputMat.put(0, 0, outputMatArray)
-
-        // Optionally convert back to 8-bit if needed for display or further processing
-        val convertedOutputMat = Mat()
-        outputMat.convertTo(convertedOutputMat, CvType.CV_8UC3, 255.0)
-
-        // Cleanup
-        landscapeFrame.release() // Release if no longer needed
-        return convertedOutputMat
+        return Pair(segmentedList, denoisedList)
     }
 
-
     fun close() {
-        interpreter?.close()
+        model?.destroy()
     }
 
 }
